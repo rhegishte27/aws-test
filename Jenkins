@@ -61,11 +61,6 @@ pipeline{
             }
         }
         
-        stage('Terrafrom Apply'){
-            steps{
-                sh label: '', script: 'terraform apply -var="access_key=$access_key" -var="secret_key=$secret_key" --auto-approve'
-            }        
-        }
         stage('Approval') {
             agent { label 'master' }
             when {
