@@ -1,7 +1,22 @@
+def ENVIRONMENTS = [
+    'POC': [env: 'pc-poc'],
+    'DEV': [env: 'cm-dev'],
+    'QA': [env: 'cm-qa'],
+    'PROD': [env: 'cm-prod']
+]
+
+def allowed_environments = get_environments(ENVIRONMENTS, env.JOB_NAME)
+
 pipeline{
-    agent any
-    tools {
-        terraform "terraform-11"
+    agent none
+    options {
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timestamps()
+    }
+    environment{
+        PLAN_STATUS=""
+        AWS_ENVIRONMENT=""
     }
     parameters {
         choice(name: 'ENVIRONMENT', choices: allowed_environments, description: 'The environment.')
@@ -29,16 +44,58 @@ pipeline{
                 }
             }
         }        
-       stage('Terrafrom init'){
+        stage('Create Terraform plan') {
+            agent {
+                docker {
+                    image 'hashicorp/terraform:0.14.3'
+                    args '--entrypoint=""'
+                }
+            }
             steps{
-                sh label: '', script: 'terraform init'
+                script{
+                    dir('terraform'){
+                        sh label: 'configure_terraform', script: "terraform init"
+                        sh label: 'run_terraform_plan', script: "terraform plan"
+                    }
+                }
             }
         }
+        
         stage('Terrafrom Apply'){
             steps{
                 sh label: '', script: 'terraform apply -var="access_key=$access_key" -var="secret_key=$secret_key" --auto-approve'
             }        
-        }                
+        }
+        stage('Approval') {
+            agent { label 'master' }
+            when {
+                expression{ ! PLAN_STATUS.startsWith("No changes") }
+            }
+            steps{
+                script {
+                    input(id: 'confirm', message: "Apply Terraform? ${PLAN_STATUS}")
+                }
+            }
+        }
+        stage('Apply Terraform plan') {
+            agent {
+                docker {
+                    image 'hashicorp/terraform:0.14.3'
+                    args '--entrypoint=""'
+                }
+            }
+            when {
+                expression{ ! PLAN_STATUS.startsWith("No changes") }
+            }
+            steps{
+                script{
+                    dir('terraform'){ 
+                        sh label: 'run_terraform_plan', script: "terraform apply --auto-approve"
+                      }
+                }
+            }
+        }
+        
         
     }
 }
