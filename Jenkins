@@ -1,0 +1,29 @@
+pipeline{
+    agent any
+    tools {
+        terraform "terraform-11"
+    }
+    stages{
+        stage('Chcek credential'){
+            steps{
+               sh label: '', script: 'export access_key=$AWS_ACCESS_KEY_ID && export secret_key=$AWS_SECRET_ACCESS_KEY'
+            }
+        }
+        stage('Git Checkout'){
+            steps{
+                git branch: 'main', url: 'https://github.com/rhegishte27/aws-test.git'
+            }
+        }
+       stage('Terrafrom init'){
+            steps{
+                sh label: '', script: 'terraform init'
+            }
+        }
+        stage('Terrafrom Apply'){
+            steps{
+                sh label: '', script: 'terraform apply -var="access_key=$access_key" -var="secret_key=$secret_key" --auto-approve'
+            }        
+        }                
+        
+    }
+}
